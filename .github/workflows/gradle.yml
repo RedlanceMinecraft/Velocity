@@ -1,9 +1,6 @@
-# This workflow will build a Java project with Gradle
-# For more information see: https://docs.github.com/actions/language-and-framework-guides/building-and-testing-java-with-gradle
-
 name: Java CI with Gradle
 
-on: [push, pull_request]
+on: [push, workflow_dispatch]
 
 jobs:
   build-11:
@@ -19,4 +16,16 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Build with Gradle
-      run: ./gradlew build
+      run: ./gradlew publish
+      env:
+        MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+        MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+    - name: Upload artifacts
+      uses: rexlmanu/pterodactyl-upload-action@v1
+      with:
+        panel-host: ${{ secrets.PANEL_HOST }}
+        api-key: ${{ secrets.API_KEY }}
+        server-id: "8936a2f6"
+        restart: "true"
+        source: "proxy/build/libs/velocity-proxy-3.2.0-SNAPSHOT-all.jar"
+        target: "./velocity.jar"

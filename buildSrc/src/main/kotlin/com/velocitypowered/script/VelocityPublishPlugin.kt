@@ -33,9 +33,7 @@ import org.gradle.kotlin.dsl.getByType
 
 class VelocityPublishPlugin : Plugin<Project> {
     override fun apply(target: Project) = target.afterEvaluate {
-        if (target.name != "velocity-proxy") {
-            configure()
-        }
+        configure()
     }
     private fun Project.configure() {
         apply<JavaBasePlugin>()
@@ -43,13 +41,13 @@ class VelocityPublishPlugin : Plugin<Project> {
         extensions.configure<PublishingExtension> {
             repositories {
                 maven {
-                    credentials(PasswordCredentials::class.java)
+                    credentials {
+                        username = System.getenv("MAVEN_USERNAME")
+                        password = System.getenv("MAVEN_PASSWORD")
+                    }
 
                     name = "paper"
-                    val base = "https://papermc.io/repo/repository/maven"
-                    val releasesRepoUrl = "$base-releases/"
-                    val snapshotsRepoUrl = "$base-snapshots/"
-                    setUrl(if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl)
+                    setUrl("https://repo.constructlegacy.ru/public")
                 }
             }
             publications {
@@ -58,11 +56,11 @@ class VelocityPublishPlugin : Plugin<Project> {
                     pom {
                         name.set("Velocity")
                         description.set("The modern, next-generation Minecraft server proxy")
-                        url.set("https://www.velocitypowered.com")
+                        url.set("https://constructlegacy.ru")
                         scm {
-                            url.set("https://github.com/PaperMC/Velocity")
-                            connection.set("scm:git:https://github.com/PaperMC/Velocity.git")
-                            developerConnection.set("scm:git:https://github.com/PaperMC/Velocity.git")
+                            url.set("https://github.com/TurboMC/Velocity")
+                            connection.set("scm:git:https://github.com/TurboMC/Velocity.git")
+                            developerConnection.set("scm:git:https://github.com/TurboMC/Velocity.git")
                         }
                     }
                 }
