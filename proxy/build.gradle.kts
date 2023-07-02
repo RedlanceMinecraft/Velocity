@@ -100,7 +100,8 @@ dependencies {
     implementation(libs.netty.transport.native.epoll)
     implementation(variantOf(libs.netty.transport.native.epoll) { classifier("linux-x86_64") })
     implementation(variantOf(libs.netty.transport.native.epoll) { classifier("linux-aarch_64") })
-
+    compileOnly("pro.gravit.launcher:launcher-core:5.4.0")
+    compileOnly("pro.gravit.launcher:launcher-ws-api:5.4.0")
     implementation(libs.jopt)
     implementation(libs.terminalconsoleappender)
     runtimeOnly(libs.jline)

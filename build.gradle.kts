@@ -23,6 +23,8 @@ subprojects {
         mavenCentral()
         maven("https://s01.oss.sonatype.org/content/repositories/snapshots/") // adventure
         maven("https://repo.papermc.io/repository/maven-public/")
+        // oss sonatype
+        maven("https://oss.sonatype.org/content/repositories/snapshots")
     }
 
     dependencies {
