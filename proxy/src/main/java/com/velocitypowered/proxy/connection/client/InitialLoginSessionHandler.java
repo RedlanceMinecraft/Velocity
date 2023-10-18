@@ -33,6 +33,7 @@ import com.velocitypowered.proxy.connection.MinecraftConnection;
 import com.velocitypowered.proxy.connection.MinecraftSessionHandler;
 import com.velocitypowered.proxy.connection.util.LauncherUtil;
 import com.velocitypowered.proxy.crypto.IdentifiedKeyImpl;
+import com.velocitypowered.proxy.protocol.StateRegistry;
 import com.velocitypowered.proxy.protocol.netty.MinecraftDecoder;
 import com.velocitypowered.proxy.protocol.packet.EncryptionRequest;
 import com.velocitypowered.proxy.protocol.packet.EncryptionResponse;
@@ -40,6 +41,7 @@ import com.velocitypowered.proxy.protocol.packet.LoginPluginResponse;
 import com.velocitypowered.proxy.protocol.packet.ServerLogin;
 import io.netty.buffer.ByteBuf;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.MessageDigest;
@@ -115,47 +117,45 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
     this.login = packet;
 
     PreLoginEvent event = new PreLoginEvent(inbound, login.getUsername());
-    server.getEventManager().fire(event)
-        .thenRunAsync(() -> {
-          if (mcConnection.isClosed()) {
-            // The player was disconnected
-            return;
+    server.getEventManager().fire(event).thenRunAsync(() -> {
+      if (mcConnection.isClosed()) {
+        // The player was disconnected
+        return;
+      }
+
+      PreLoginComponentResult result = event.getResult();
+      Optional<Component> disconnectReason = result.getReasonComponent();
+      if (disconnectReason.isPresent()) {
+        // The component is guaranteed to be provided if the connection was denied.
+        inbound.disconnect(disconnectReason.get());
+        return;
+      }
+
+      inbound.loginEventFired(() -> {
+        if (mcConnection.isClosed()) {
+          // The player was disconnected
+          return;
+        }
+
+        mcConnection.eventLoop().execute(() -> {
+          if (!result.isForceOfflineMode()
+              && (server.getConfiguration().isOnlineMode() || result.isOnlineModeAllowed())) {
+            // Request encryption.
+            EncryptionRequest request = generateEncryptionRequest();
+            this.verify = Arrays.copyOf(request.getVerifyToken(), 4);
+            mcConnection.write(request);
+            this.currentState = LoginState.ENCRYPTION_REQUEST_SENT;
+          } else {
+            mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
+                new AuthSessionHandler(server, inbound,
+                    GameProfile.forOfflinePlayer(login.getUsername()), false));
           }
-
-          PreLoginComponentResult result = event.getResult();
-          Optional<Component> disconnectReason = result.getReasonComponent();
-          if (disconnectReason.isPresent()) {
-            // The component is guaranteed to be provided if the connection was denied.
-            inbound.disconnect(disconnectReason.get());
-            return;
-          }
-
-          inbound.loginEventFired(() -> {
-            if (mcConnection.isClosed()) {
-              // The player was disconnected
-              return;
-            }
-
-            mcConnection.eventLoop().execute(() -> {
-              if (!result.isForceOfflineMode() && (server.getConfiguration().isOnlineMode()
-                  || result.isOnlineModeAllowed())) {
-                // Request encryption.
-                EncryptionRequest request = generateEncryptionRequest();
-                this.verify = Arrays.copyOf(request.getVerifyToken(), 4);
-                mcConnection.write(request);
-                this.currentState = LoginState.ENCRYPTION_REQUEST_SENT;
-              } else {
-                mcConnection.setSessionHandler(new AuthSessionHandler(
-                    server, inbound, GameProfile.forOfflinePlayer(login.getUsername()), false
-                ));
-              }
-            });
-          });
-        }, mcConnection.eventLoop())
-        .exceptionally((ex) -> {
-          logger.error("Exception in pre-login stage", ex);
-          return null;
         });
+      });
+    }, mcConnection.eventLoop()).exceptionally((ex) -> {
+      logger.error("Exception in pre-login stage", ex);
+      return null;
+    });
 
     return true;
   }
@@ -197,6 +197,8 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
       byte[] decryptedSharedSecret = decryptRsa(serverKeyPair, packet.getSharedSecret());
       String serverId = generateServerId(decryptedSharedSecret, serverKeyPair.getPublic());
 
+      String playerIp = ((InetSocketAddress) mcConnection.getRemoteAddress()).getHostString();
+
       CheckServerRequest csr = new CheckServerRequest(login.getUsername(), serverId);
       Request.getRequestService().request(csr).handleAsync((response, exception) -> {
         if (mcConnection.isClosed()) {
@@ -221,30 +223,34 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
           mcConnection.close(true);
           return null;
         }
-        if (exception == null) {
-          // All went well, initialize the session.
-          // Not so fast, now we verify the public key for 1.19.1+
-          if (inbound.getIdentifiedKey() != null
+
+        {
+          if (exception == null) {
+            final GameProfile profile = LauncherUtil.makeGameProfile(response.playerProfile);
+            // Not so fast, now we verify the public key for 1.19.1+
+            if (inbound.getIdentifiedKey() != null
                 && inbound.getIdentifiedKey().getKeyRevision() == IdentifiedKey.Revision.LINKED_V2
                 && inbound.getIdentifiedKey() instanceof IdentifiedKeyImpl) {
-            IdentifiedKeyImpl key = (IdentifiedKeyImpl) inbound.getIdentifiedKey();
-            if (!key.internalAddHolder(response.uuid)) {
-              inbound.disconnect(
-                      Component.translatable("multiplayer.disconnect.invalid_public_key"));
+              IdentifiedKeyImpl key = (IdentifiedKeyImpl) inbound.getIdentifiedKey();
+              if (!key.internalAddHolder(profile.getId())) {
+                inbound.disconnect(
+                    Component.translatable("multiplayer.disconnect.invalid_public_key"));
+              }
             }
+            // All went well, initialize the session.
+            mcConnection.setActiveSessionHandler(StateRegistry.LOGIN,
+                new AuthSessionHandler(server, inbound, profile, true));
+          } else if (exception instanceof RequestException) {
+            // Apparently an offline-mode user logged onto this online-mode proxy.
+            inbound.disconnect(Component.translatable("velocity.error.online-mode-only",
+                    NamedTextColor.RED));
+          } else {
+            // Something else went wrong
+            logger.error(
+                "Unable to authenticate {} ({}) with Launcher",
+                login.getUsername(), playerIp);
+            inbound.disconnect(Component.translatable("multiplayer.disconnect.authservers_down"));
           }
-          //
-          mcConnection.setSessionHandler(new AuthSessionHandler(
-                  server, inbound, LauncherUtil.makeGameProfile(response.playerProfile), true
-          ));
-        } else if (exception instanceof RequestException) {
-          // Apparently an offline-mode user logged onto this online-mode proxy.
-          inbound.disconnect(Component.translatable("velocity.error.online-mode-only",
-                  NamedTextColor.RED));
-        } else {
-          // Something else went wrong
-          logger.error("Unable to authenticate with Launcher", exception);
-          inbound.disconnect(Component.translatable("multiplayer.disconnect.authservers_down"));
         }
         return null;
       }, mcConnection.eventLoop());
