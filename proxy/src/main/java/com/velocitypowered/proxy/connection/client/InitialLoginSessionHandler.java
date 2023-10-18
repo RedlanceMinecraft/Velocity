@@ -224,7 +224,7 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
           return null;
         }
 
-        {
+          {
           if (exception == null) {
             final GameProfile profile = LauncherUtil.makeGameProfile(response.playerProfile);
             // Not so fast, now we verify the public key for 1.19.1+
@@ -242,8 +242,8 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
                 new AuthSessionHandler(server, inbound, profile, true));
           } else if (exception instanceof RequestException) {
             // Apparently an offline-mode user logged onto this online-mode proxy.
-            inbound.disconnect(Component.translatable("velocity.error.online-mode-only",
-                    NamedTextColor.RED));
+            inbound.disconnect(
+                Component.translatable("velocity.error.online-mode-only", NamedTextColor.RED));
           } else {
             // Something else went wrong
             logger.error(
@@ -251,7 +251,7 @@ public class InitialLoginSessionHandler implements MinecraftSessionHandler {
                 login.getUsername(), playerIp);
             inbound.disconnect(Component.translatable("multiplayer.disconnect.authservers_down"));
           }
-        }
+          }
         return null;
       }, mcConnection.eventLoop());
     } catch (GeneralSecurityException e) {
