@@ -6,13 +6,12 @@ plugins {
 extensions.configure<PublishingExtension> {
     repositories {
         maven {
-            credentials(PasswordCredentials::class.java)
-
+            credentials {
+                username = System.getenv("MAVEN_USERNAME")
+                password = System.getenv("MAVEN_PASSWORD")
+            }
             name = "paper"
-            val base = "https://repo.papermc.io/repository/maven"
-            val releasesRepoUrl = "$base-releases/"
-            val snapshotsRepoUrl = "$base-snapshots/"
-            setUrl(if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl)
+            setUrl("https://repo.constructlegacy.ru/public")
         }
     }
     publications {
@@ -21,7 +20,7 @@ extensions.configure<PublishingExtension> {
             pom {
                 name.set("Velocity")
                 description.set("The modern, next-generation Minecraft server proxy")
-                url.set("https://constructlegacy.ru/public")
+                url.set("https://constructlegacy.ru")
                 scm {
                     url.set("https://github.com/RedlanceMinecraft/Velocity")
                     connection.set("scm:git:https://github.com/RedlanceMinecraft/Velocity.git")
