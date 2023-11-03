@@ -21,11 +21,11 @@ extensions.configure<PublishingExtension> {
             pom {
                 name.set("Velocity")
                 description.set("The modern, next-generation Minecraft server proxy")
-                url.set("https://papermc.io/software/velocity")
+                url.set("https://constructlegacy.ru/public")
                 scm {
-                    url.set("https://github.com/PaperMC/Velocity")
-                    connection.set("scm:git:https://github.com/PaperMC/Velocity.git")
-                    developerConnection.set("scm:git:https://github.com/PaperMC/Velocity.git")
+                    url.set("https://github.com/RedlanceMinecraft/Velocity")
+                    connection.set("scm:git:https://github.com/RedlanceMinecraft/Velocity.git")
+                    developerConnection.set("scm:git:https://github.com/RedlanceMinecraft/Velocity.git")
                 }
             }
         }
